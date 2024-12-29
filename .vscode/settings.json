@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "db.h": "c",
+        "schemas.h": "c",
+        "stdlib.h": "c",
+        "sql.h": "c"
+    }
+}
