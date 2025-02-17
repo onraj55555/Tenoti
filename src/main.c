@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <sqlite3.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -22,26 +23,15 @@
 
 #define FUTURE_TIME 2 * 60 * 60 // max 2 hrs in advance
 
-/*int64_t get_first_due(sqlite3 * db) {
-    log_info("Get first due: Getting first due\n");
-    notification_t n = { 0 };
-    int r = find_first_next_notification(db, &n);
-
-    if(!n.exists) {
-        log_info("Get first due: No first due\n");
-        return -1;
-    }
-
-    return n.due;
-}*/
-
 sqlite3 * init();
-static int general_callback(void * void_notification_list, int argc, char ** argv, char ** azColName);
 
 int64_t get_current_time();
 int64_t from_now(int64_t t);
 
 void general_usage(sqlite3 * db);
+void parse_args(sqlite3 * db, int argc, char ** argv);
+
+void add_notification(sqlite3 * db);
 
 int main(int argc, char ** argv) {
     sqlite3 * db = init();
@@ -64,7 +54,6 @@ int main(int argc, char ** argv) {
 
     // No params, check if possible overdue and check DB if needed
     if(argc == 1) {
-
         general_usage(db);
     } else {
         pretty_print("Parsing args...\n");
@@ -73,44 +62,6 @@ int main(int argc, char ** argv) {
     db_close(db);
 
     return 0;
-    
-    /*log_info("Main: Opening DB\n");
-    db_open("db/test.db", &db);
-
-    log_info("Main: Initializing DB\n");
-    init(db);
-
-    notification_t notification = { 0 };
-
-    log_info("Main: Checking first due notification\n");
-    check_first_due(db, &notification);
-
-    log_info("Main: inserting into notifications\n");
-    insert_into_notifications(db, "Title", time(NULL), time(NULL) - 60, 0, 0, 0);
-
-    if(find_first_next_notification(db, &notification) == -1) {
-        log_error("Main: Error while finding next notification\n");
-    }
-
-    if(!notification.exists) {
-        log_info("Main: No next notification\n");
-        db_close(db);
-        return 0;
-    }
-
-    char * str = notification_to_str(&notification);
-
-    pretty_print("%s\n", str);
-
-    free(str);
-
-    notification_list_t list = { 0 };
-    find_all_overdue_notifications(db, &list);
-    free_notification_list(&list);
-
-    db_close(db);
-
-    return 0;*/
 }
 
 // Create tables if needed in case it's the first tine the code starts up
@@ -207,3 +158,100 @@ void general_usage(sqlite3 * db) {
 
     free_list(&list);
 }
+
+// argv starts from the global argv starting from index 1
+void parse_args(sqlite3 * db, int argc, char ** argv) {
+    // Add notification
+    if(strcmp(argv[0], "add") == 0 || argv[0][0] == 'a') {
+        log_info("parse_args: Add argument found\n");
+        add_notification(db);
+    }
+}
+
+int64_t parse_different_time_formats(char * buffer, ssize_t char_count);
+
+void add_notification(sqlite3 * db) {
+    notification_t n = { 0 };
+    log_info("add_notification: Starting add notification\n");
+    pretty_print("Adding notification\n");
+
+    pretty_print("What should the title be? (gets truncated at 50 characters)\n");
+    // TODO: change magic number to define macro in schemas.c
+    fgets(n.title, 51, stdin);
+
+    pretty_print("When should it be due?\n");
+    pretty_print("Formats:\n");
+    pretty_print("- UNIX time: 1234u\n");
+    pretty_print("- Delta time: +12h34m56s\n");
+    pretty_print("- Absolute time: 12h34m56s\n");
+
+    int64_t entered_time = -1;
+
+    while(entered_time == -1) {
+        char * buffer = 0;
+        size_t buffersize = 0;
+        ssize_t char_count = getline(&buffer, &buffersize, stdin);
+
+        // Remove \n
+        if(buffer[char_count - 1] = '\n') {
+            buffer[char_count - 1] = 0;
+            char_count--;
+        }
+
+        entered_time = parse_different_time_formats(buffer, char_count);
+    }
+}
+
+int64_t parse_different_time_formats(char * buffer, ssize_t char_count) {
+    int64_t result = 0;
+
+    // Unix time parsed
+    if(sscanf(buffer, "%ldu", &result) == 1) {
+        return result;
+    }
+
+    // TODO: add date to the time format
+    if(sscanf(buffer, "+%dh%dm%ds"))
+
+    if(buffer[char_count - 1] == 'u') {
+        // Check and convert UNIX to abs
+
+        // Exclude u and \n
+        for(int i = 0; i < char_count - 2; i++) {
+            if(buffer[i] > '9' || buffer[i] < '0') {
+                pretty_print("The entered time was invalid, try again");
+                return -1;
+            }
+        }
+
+        // Remove the u
+        buffer[char_count - 2] = 0;
+
+        char * unix_time = buffer + 1;
+
+        return atol(unix_time);
+
+    } else if(buffer[0] == '+') {
+        // Check and convert delta to abs
+    } else {
+        // Check abs
+    }
+}
+
+int check_hms(char * buffer, ssize_t char_count) {
+    enum {
+        hour_digit1,
+        hour_digit2,
+        hour_sep,
+        minute_digit1,
+        minute_digit2,
+        minute_sep,
+        second_digit1,
+        second_digit2,
+        second_sep
+    };
+
+    for(int i = 0; i )
+}
+
+int64_t hms_to_int(char * buffer);
