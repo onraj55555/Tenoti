@@ -11,6 +11,7 @@
 #include "log.h"
 #include "sql.h"
 #include "fmt.h"
+#include "date.h"
 
 //#define CREATED_FILE "/home/onraj/.tenoti/created"
 #define CREATED_FILE "db/created"
@@ -34,6 +35,14 @@ void parse_args(sqlite3 * db, int argc, char ** argv);
 void add_notification(sqlite3 * db);
 
 int main(int argc, char ** argv) {
+    datetime_t now = { 0 };
+    datetime(&now, NULL);
+    char * now_str = date_to_string(&now);
+
+    printf("%s", now_str);
+
+    return 0;
+
     sqlite3 * db = init();
 
     if(!db) {
@@ -251,7 +260,9 @@ int check_hms(char * buffer, ssize_t char_count) {
         second_sep
     };
 
-    for(int i = 0; i )
+    //for(int i = 0; i )
+
+    return 0;
 }
 
 int64_t hms_to_int(char * buffer);

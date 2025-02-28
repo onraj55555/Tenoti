@@ -3,6 +3,10 @@
         "db.h": "c",
         "schemas.h": "c",
         "stdlib.h": "c",
-        "sql.h": "c"
+        "sql.h": "c",
+        "*.tcc": "cpp",
+        "ctime": "cpp",
+        "iomanip": "cpp",
+        "date.h": "c"
     }
 }
