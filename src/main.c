@@ -8,30 +8,14 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "main.h"
 #include "db.h"
 #include "log.h"
 #include "sql.h"
 #include "fmt.h"
 #include "datetime.h"
 
-//#define CREATED_FILE "/home/onraj/.tenoti/created"
-#define CREATED_FILE "db/created"
 
-//#define FIRST_DUE_FILE "/home/onraj/.tenoti/first_due"
-#define FIRST_DUE_FILE "db/first_due"
-
-//#define DB_FILE "/home/onraj/.tenoti/db.sqlite3"
-#define DB_FILE "db/test.db"
-
-#define FUTURE_TIME 2 * 60 * 60 // max 2 hrs in advance
-
-sqlite3 * init();
-
-int64_t get_current_time();
-int64_t from_now(int64_t t);
-
-void general_usage(sqlite3 * db);
-void parse_args(sqlite3 * db, int argc, char ** argv);
 
 void add_notification(sqlite3 * db);
 
@@ -181,7 +165,7 @@ void parse_args(sqlite3 * db, int argc, char ** argv) {
 int64_t parse_different_time_formats(char * buffer, ssize_t char_count);
 
 // 12y34M56d78h90m
-int parse_absolute_time(char * buffer, ssize_t char_count, int64_t result) {
+int parse_absolute_time(char * buffer, ssize_t char_count, int64_t * result) {
     datetime_t dt = { 0 };
     uint16_t temp = 0;
     for(int i = 0; i < char_count; i++) {
@@ -195,68 +179,57 @@ int parse_absolute_time(char * buffer, ssize_t char_count, int64_t result) {
             case 'm': dt.minute = temp; break;
             default:
                 pretty_print("Parsing error: cannot parse format character '%c' in absolute time, only one of the following is allowed: [yMdhm]\n", buffer[i]);
-                return -1;
+                return 0;
             }
             temp = 0;
         }
     }
 
     // Parse month
-    if(dt.month < 1 || dt.month > 12 ) {
-        pretty_print("Range error: month can only be in intervanl [1, 12], got %d\n", dt.month);
-        return -1;
+    {
+        if(dt.month < 1 || dt.month > 12 ) {
+            pretty_print("Range error: month can only be in intervanl [1, 12], got %d\n", dt.month);
+            return 0;
+        }
     }
 
     // Parse day
     {
         int days_in_month = datetime_day_in_month(dt.year, dt.month);
         if(dt.day < 1 || dt.day > days_in_month) {
-            pretty_print("Range error: day can only be in interval [1, %d]\n ", days_in_month);
-            return -1;
+            pretty_print("Range error: day can only be in interval [1, %d]\n, got %d ", days_in_month, dt.day);
+            return 0;
         }
     }
 
     // Parse hour
-    if(dt.hour > 23) {
-        pretty_print("Range error: hour can only be in interval [0, 23]\n");
-        return -1;
+    {
+        if(dt.hour > 23) {
+            pretty_print("Range error: hour can only be in interval [0, 23], got %d\n", dt.hour);
+            return 0;
+        }
     }
 
     // Parse minute
-    if(dt.minute > 59) {
-        pretty_print("Range error: minute can only be in interval [0, 59]\n");
-        return -1;
+    {
+        if(dt.minute > 59) {
+            pretty_print("Range error: minute can only be in interval [0, 59], got %d\n", dt.minute);
+            return 0;
+        }
     }
 
     int64_t temp2 = datetime_from(&dt);
-    TODO: check for error and print good message
 
+    {
+        if(temp2 == 0) {
+            pretty_print("Other error: conversion failed for datetime string '%s'\n", buffer);
+            return 0;
+        }
+    }
 
+    *result = temp2;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    if()
+    return 1;
 }
 
 void add_notification(sqlite3 * db) {
@@ -288,6 +261,9 @@ void add_notification(sqlite3 * db) {
         }
 
         entered_time = parse_different_time_formats(buffer, char_count);
+
+        // According to the manual of getline, the buffer should be freed by the user
+        free(buffer);
     }
 }
 
@@ -300,7 +276,7 @@ int64_t parse_different_time_formats(char * buffer, ssize_t char_count) {
     //}
 
     // TODO: add date to the time format
-    if(sscanf(buffer, "+%dd%dh%dm"))
+    /*if(sscanf(buffer, "+%dd%dh%dm"))
 
     if(buffer[char_count - 1] == 'u') {
         // Check and convert UNIX to abs
@@ -320,29 +296,15 @@ int64_t parse_different_time_formats(char * buffer, ssize_t char_count) {
 
         return atol(unix_time);
 
-    } else if(buffer[0] == '+') {
-        // Check and convert delta to abs
+    } else */
+    if(buffer[0] == '+') {
+        pretty_print("Not implemented error: delta time is not implemented yet\n");
+
+        return -1;
     } else {
-        // Check abs
+        int64_t absolute_time = 0;
+        if(parse_absolute_time(buffer, char_count, &absolute_time) == 0) return -1;
+
+        return absolute_time;
     }
 }
-
-int check_hms(char * buffer, ssize_t char_count) {
-    enum {
-        hour_digit1,
-        hour_digit2,
-        hour_sep,
-        minute_digit1,
-        minute_digit2,
-        minute_sep,
-        second_digit1,
-        second_digit2,
-        second_sep
-    };
-
-    //for(int i = 0; i )
-
-    return 0;
-}
-
-int64_t hms_to_int(char * buffer);

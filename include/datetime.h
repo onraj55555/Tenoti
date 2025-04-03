@@ -23,6 +23,13 @@ void datetime_new(datetime_t * dt, uint8_t minute, uint8_t hour, uint8_t day, ui
 char * datetime_to_string(const datetime_t * dt);
 void datetime_print(const datetime_t * dt);
 void datetime(datetime_t * dt, time_t * t);
+
+/**
+ * @brief Converts a datetime_t struct to UNIX time
+ * 
+ * @param dt datetime_t struct
+ * @return The UNIX time representation of the datetime_t struct, 0 if the conversion errored
+*/
 time_t datetime_from(const datetime_t * dt);
 int is_leapyear(uint16_t year);
 // Watch out for dayligh savings!
