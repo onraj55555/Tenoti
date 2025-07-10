@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdlib.h>
 
 void generic_log(const char * prefix, const char * fmt, va_list args) {
     fprintf(stderr, "%s ", prefix);

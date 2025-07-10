@@ -6,10 +6,81 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+sqlite3 * db;
 
 #define CHECK_SQLITE_BIND(statement, error_msg) if(statement != SQLITE_OK) { sqlite3_finalize(stmt); log_error(error_msg); return -1; }
 
-int db_general_query(sqlite3 * db, notification_list_t * list, char * query) {
+//#define DB_FOLDER "/home/onraj/.tenoti"
+#define DB_FOLDER "db"
+
+//#define DB_FILE "/home/onraj/.tenoti/db.sqlite3"
+#define DB_FILE "db/test.db"
+
+// Create tables if needed in case it's the first tine the code starts up
+void db_init() {
+    log_info("Init: Initializing DB\n");
+
+    DIR * dir = opendir(DB_FOLDER);
+    if(dir) {
+        closedir(dir);
+    } else {
+        log_debug("Making db directory\n");
+        mkdir(DB_FOLDER, 0700);
+    }
+
+
+    int exists = access(DB_FILE, F_OK);
+
+    db_open(DB_FILE, &db);
+
+    if(exists != 0) {
+        log_info("Init: Creating DB\n");
+
+        if(!db) {
+            log_error("Init: Failed to create DB file\n");
+        }
+
+        sqlite3_stmt * stmt;
+        int rc = sqlite3_prepare_v2(db, CREATE_DETAILS_TABLE, -1, &stmt, NULL);
+
+        if(rc != SQLITE_OK) {
+            log_error("Init: Failed to create details table prepared statement\n");
+            db_close();
+            exit(EXIT_FAILURE);
+        }
+
+        if(db_exec(stmt, NULL) == -1) {
+            log_error("Init: Failed to create details table\n");
+            db_close();
+            exit(EXIT_FAILURE);
+        }
+
+        rc = sqlite3_prepare_v2(db, CREATE_NOTIFICATIONS_TABLE, -1, &stmt, NULL);
+
+        if(rc != SQLITE_OK) {
+            log_error("Init: Failed to create notifications table prepared statement\n");
+            db_close();
+            exit(EXIT_FAILURE);
+        }
+
+        if(db_exec(stmt, NULL) == -1) {
+            log_error("Init: Failed to create notifications table\n");
+            db_close();
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if(!db) {
+        log_error("Init: Failed to open DB\n");
+    }
+}
+
+int db_general_query(notification_list_t * list, char * query) {
     sqlite3_stmt * stmt;
     int rc;
 
@@ -19,14 +90,14 @@ int db_general_query(sqlite3 * db, notification_list_t * list, char * query) {
         return -1;
     }
 
-    rc = db_exec(db, stmt, list);
+    rc = db_exec(stmt, list);
 
     sqlite3_finalize(stmt);
 
     return rc;
 }
 
-int db_general_query_param(sqlite3 * db, notification_list_t * list, char * query, int buffer_size, int64_t param) {
+int db_general_query_param(notification_list_t * list, char * query, int buffer_size, int64_t param) {
     sqlite3_stmt * stmt;
     int rc;
 
@@ -36,52 +107,52 @@ int db_general_query_param(sqlite3 * db, notification_list_t * list, char * quer
         -1;
     }
 
-    CHECK_SQLITE_BIND(sqlite3_bind_int64(stmt, 1, param), "DB_genera_query_param: Failed to bind param\n");
+    CHECK_SQLITE_BIND(sqlite3_bind_int64(stmt, 1, param), "DB_general_query_param: Failed to bind param\n");
 
-    rc = db_exec(db, stmt, list);
+    rc = db_exec(stmt, list);
 
     sqlite3_finalize(stmt);
 
     return rc;
 }
 
-int db_find_all_notifications(sqlite3 * db, notification_list_t * list) {
-    return db_general_query(db, list, SELECT_ALL_NOTIFICATIONS);
+int db_find_all_notifications(notification_list_t * list) {
+    return db_general_query(list, SELECT_ALL_NOTIFICATIONS);
 }
 
-int db_find_all_notifications_before_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_BEFORE_TIME_BUFFER, t);
+int db_find_all_notifications_before_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_BEFORE_TIME_BUFFER, t);
 }
 
-int db_find_all_notifications_after_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_AFTER_TIME_BUFFER, t);
+int db_find_all_notifications_after_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_AFTER_TIME_BUFFER, t);
 }
 
-int db_find_all_notifications_unchecked(sqlite3 * db, notification_list_t * list) {
-    return db_general_query(db, list, SELECT_ALL_NOTIFICATIONS_UNCHECKED);
+int db_find_all_notifications_unchecked(notification_list_t * list) {
+    return db_general_query(list, SELECT_ALL_NOTIFICATIONS_UNCHECKED);
 }
 
-int db_find_all_notifications_checked(sqlite3 * db, notification_list_t * list) {
-    return db_general_query(db, list, SELECT_ALL_NOTIFICATIONS_CHECKED);
+int db_find_all_notifications_checked(notification_list_t * list) {
+    return db_general_query(list, SELECT_ALL_NOTIFICATIONS_CHECKED);
 }
 
-int db_find_all_notifications_unchecked_before_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_UNCHECKED_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_UNCHECKED_BEFORE_TIME_BUFFER, t);
+int db_find_all_notifications_unchecked_before_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_UNCHECKED_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_UNCHECKED_BEFORE_TIME_BUFFER, t);
 }
 
-int db_find_all_notifications_unchecked_after_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_UNCHECKED_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_UNCHECKED_AFTER_TIME_BUFFER, t);
+int db_find_all_notifications_unchecked_after_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_UNCHECKED_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_UNCHECKED_AFTER_TIME_BUFFER, t);
 }
 
-int db_find_all_notifications_checked_before_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_CHECKED_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_CHECKED_BEFORE_TIME_BUFFER, t);
+int db_find_all_notifications_checked_before_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_CHECKED_BEFORE_TIME, SELECT_ALL_NOTIFICATIONS_CHECKED_BEFORE_TIME_BUFFER, t);
 }
 
-int db_find_all_notifications_checked_after_time(sqlite3 * db, notification_list_t * list, int64_t t) {
-    return db_general_query_param(db, list, SELECT_ALL_NOTIFICATIONS_CHECKED_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_CHECKED_AFTER_TIME_BUFFER, t);
+int db_find_all_notifications_checked_after_time(notification_list_t * list, int64_t t) {
+    return db_general_query_param(list, SELECT_ALL_NOTIFICATIONS_CHECKED_AFTER_TIME, SELECT_ALL_NOTIFICATIONS_CHECKED_AFTER_TIME_BUFFER, t);
 }
 
-int db_insert_into_notifications(sqlite3 * db, notification_t * notification) {
+int db_insert_into_notifications(notification_t * notification) {
     sqlite3_stmt * stmt;
     int rc;
 
@@ -100,7 +171,7 @@ int db_insert_into_notifications(sqlite3 * db, notification_t * notification) {
     CHECK_SQLITE_BIND(sqlite3_bind_int(stmt, 5, notification->reminder), "DB_insert_into_notifications: Failed to bind reminder\n");
     CHECK_SQLITE_BIND(sqlite3_bind_int64(stmt, 6, notification->details), "DB_insert_into_notifications: Failed to bind details\n");
 
-    rc = db_exec(db, stmt, NULL);
+    rc = db_exec(stmt, NULL);
 
     sqlite3_finalize(stmt);
 
@@ -122,12 +193,12 @@ void db_open(const char * db_name, sqlite3 ** db) {
     log_info("DB_open: DB opened\n");
 }
 
-void db_close(sqlite3 * db) {
+void db_close() {
     sqlite3_close(db);
 }
 
 // DOES NOT FINALISE THE PREPARED STATEMENT
-int db_exec(sqlite3 * db, sqlite3_stmt * stmt, notification_list_t * list) {
+int db_exec(sqlite3_stmt * stmt, notification_list_t * list) {
     log_info("DB_exec: Executing\n");
 
     if(!list) {
