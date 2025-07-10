@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <stdarg.h>
 
+#include "main.h"
 #include "db.h"
 #include "log.h"
 #include "sql.h"
@@ -148,6 +149,74 @@ void parse_args(sqlite3 * db, int argc, char ** argv) {
 }
 
 int64_t parse_different_time_formats(char * buffer, ssize_t char_count);
+
+// 12y34M56d78h90m
+int parse_absolute_time(char * buffer, ssize_t char_count, int64_t * result) {
+    datetime_t dt = { 0 };
+    uint16_t temp = 0;
+    for(int i = 0; i < char_count; i++) {
+        if(isdigit(buffer[i])) temp = temp * 10 + (buffer[i] - '0');
+        else {
+            switch (buffer[i]) {
+            case 'y': dt.year = temp; break;
+            case 'M': dt.month = temp; break;
+            case 'd': dt.day = temp; break;
+            case 'h': dt.hour = temp; break;
+            case 'm': dt.minute = temp; break;
+            default:
+                pretty_print("Parsing error: cannot parse format character '%c' in absolute time, only one of the following is allowed: [yMdhm]\n", buffer[i]);
+                return 0;
+            }
+            temp = 0;
+        }
+    }
+
+    // Parse month
+    {
+        if(dt.month < 1 || dt.month > 12 ) {
+            pretty_print("Range error: month can only be in intervanl [1, 12], got %d\n", dt.month);
+            return 0;
+        }
+    }
+
+    // Parse day
+    {
+        int days_in_month = datetime_day_in_month(dt.year, dt.month);
+        if(dt.day < 1 || dt.day > days_in_month) {
+            pretty_print("Range error: day can only be in interval [1, %d]\n, got %d ", days_in_month, dt.day);
+            return 0;
+        }
+    }
+
+    // Parse hour
+    {
+        if(dt.hour > 23) {
+            pretty_print("Range error: hour can only be in interval [0, 23], got %d\n", dt.hour);
+            return 0;
+        }
+    }
+
+    // Parse minute
+    {
+        if(dt.minute > 59) {
+            pretty_print("Range error: minute can only be in interval [0, 59], got %d\n", dt.minute);
+            return 0;
+        }
+    }
+
+    int64_t temp2 = datetime_from(&dt);
+
+    {
+        if(temp2 == 0) {
+            pretty_print("Other error: conversion failed for datetime string '%s'\n", buffer);
+            return 0;
+        }
+    }
+
+    *result = temp2;
+
+    return 1;
+}
 
 void add_notification(sqlite3 * db) {
     notification_t n = { 0 };
