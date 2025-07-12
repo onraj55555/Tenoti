@@ -16,6 +16,7 @@
 #include "log.h"
 #include "sql.h"
 #include "fmt.h"
+#include "datetime.h"
 
 
 //#define CREATED_FILE "/home/onraj/.tenoti/created"
@@ -27,27 +28,30 @@
 #define FUTURE_TIME 2 * 60 * 60 // max 2 hrs in advance
 
 // Used timer, global in case testing is needed
-timer_t * TIMER = NULL;
+time_t * TIMER = NULL;
 
 int64_t get_current_time();
 int64_t from_now(int64_t t);
-int is_leapyear(int year);
 
-void general_usage(sqlite3 * db);
-void parse_args(sqlite3 * db, int argc, char ** argv);
+void general_usage();
+void parse_args(int argc, char ** argv);
 
 void add_notification(sqlite3 * db);
 
-void panic(const char * fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
+int64_t get_current_time() {
+    return time(TIMER);
+}
 
-    vfprintf(stdout, fmt, args);
-
-    va_end(args);
-
-    db_close();
-    exit(EXIT_FAILURE);
+void parse_args(int argc, char ** argv) {
+    if(argc == 0) {
+        log_info("parse_args: General usage\n");
+        command_general_usage();
+    }
+    // Add notification
+    if(strcmp(argv[0], "add") == 0) {
+        log_info("parse_args: Add argument found\n");
+        command_add();
+    }
 }
 
 int main(int argc, char ** argv) {
@@ -69,283 +73,13 @@ int main(int argc, char ** argv) {
 
     db_insert_into_notifications(&n);
 
-    // No params, check if possible overdue and check DB if needed
-    if(argc == 1) {
-        general_usage(db);
-    } else {
-        log_debug("Parsing arguments\n");
-        parse_args(db, argc - 1, argv + 1);
-    }
+    parse_args(argc - 1, argv + 1);
 
     db_close();
 
     return 0;
 }
 
-
-
-int64_t get_current_time() {
-    return time(TIMER);
-}
-
 int64_t from_now(int64_t t) {
     return t - get_current_time();
-}
-
-int is_leapyear(int year) {
-    if(year % 4 == 0) {
-        if(year % 100) {
-            if(year % 400) return 1;
-            return 0;
-        } else {
-            return 1;
-        }
-    } else {
-        return 0;
-    }
-}
-
-void general_usage(sqlite3 * db) {
-    // Get all notifications which might be due
-    // A.k.a. check which aren't checked yet and their due <= current_time + FUTURE_TIME
-
-    log_info("General usage: Start\n");
-
-    int64_t max_due = get_current_time() + FUTURE_TIME;
-
-    notification_list_t list = { 0 };
-
-    log_info("General usage: Getting all next unchecked notifications before time\n");
-
-    int r = db_find_all_notifications_unchecked_before_time(&list, max_due);
-    //int r = db_find_all_notifications(db, &list);
-    log_info("General usage: Done getting them\n");
-
-    if(r == -1) {
-        log_error("General usage: An error occured while getting all due notifications\n");
-
-        free_list(&list);
-
-        return;
-    }
-
-    notification_link_t * link = list.notifications_link;
-    while(link) {
-        char * buffer = notification_to_str(&link->notification);
-        pretty_print("%s\n", buffer);
-        link = link->next;
-    }
-
-    free_list(&list);
-}
-
-// argv starts from the global argv starting from index 1
-void parse_args(sqlite3 * db, int argc, char ** argv) {
-    // Add notification
-    if(strcmp(argv[0], "add") == 0 || argv[0][0] == 'a') {
-        log_info("parse_args: Add argument found\n");
-        add_notification(db);
-    }
-}
-
-int64_t parse_different_time_formats(char * buffer, ssize_t char_count);
-
-// 12y34M56d78h90m
-int parse_absolute_time(char * buffer, ssize_t char_count, int64_t * result) {
-    datetime_t dt = { 0 };
-    uint16_t temp = 0;
-    for(int i = 0; i < char_count; i++) {
-        if(isdigit(buffer[i])) temp = temp * 10 + (buffer[i] - '0');
-        else {
-            switch (buffer[i]) {
-            case 'y': dt.year = temp; break;
-            case 'M': dt.month = temp; break;
-            case 'd': dt.day = temp; break;
-            case 'h': dt.hour = temp; break;
-            case 'm': dt.minute = temp; break;
-            default:
-                pretty_print("Parsing error: cannot parse format character '%c' in absolute time, only one of the following is allowed: [yMdhm]\n", buffer[i]);
-                return 0;
-            }
-            temp = 0;
-        }
-    }
-
-    // Parse month
-    {
-        if(dt.month < 1 || dt.month > 12 ) {
-            pretty_print("Range error: month can only be in intervanl [1, 12], got %d\n", dt.month);
-            return 0;
-        }
-    }
-
-    // Parse day
-    {
-        int days_in_month = datetime_day_in_month(dt.year, dt.month);
-        if(dt.day < 1 || dt.day > days_in_month) {
-            pretty_print("Range error: day can only be in interval [1, %d]\n, got %d ", days_in_month, dt.day);
-            return 0;
-        }
-    }
-
-    // Parse hour
-    {
-        if(dt.hour > 23) {
-            pretty_print("Range error: hour can only be in interval [0, 23], got %d\n", dt.hour);
-            return 0;
-        }
-    }
-
-    // Parse minute
-    {
-        if(dt.minute > 59) {
-            pretty_print("Range error: minute can only be in interval [0, 59], got %d\n", dt.minute);
-            return 0;
-        }
-    }
-
-    int64_t temp2 = datetime_from(&dt);
-
-    {
-        if(temp2 == 0) {
-            pretty_print("Other error: conversion failed for datetime string '%s'\n", buffer);
-            return 0;
-        }
-    }
-
-    *result = temp2;
-
-    return 1;
-}
-
-void add_notification(sqlite3 * db) {
-    notification_t n = { 0 };
-    log_info("add_notification: Starting add notification\n");
-    pretty_print("Adding notification\n");
-
-    pretty_print("What should the title be? (gets truncated at 50 characters)\n");
-    // TODO: change magic number to define macro in schemas.c
-    fgets(n.title, 51, stdin);
-
-    pretty_print("When should it be due?\n");
-    pretty_print("Formats:\n");
-    //pretty_print("- UNIX time: 1234u\n");
-    pretty_print("- Delta time: +12d24m56y12h34m\n");
-    pretty_print("- Absolute time: 12d24m56y12h34m\n");
-
-    int64_t entered_time = -1;
-
-    while(entered_time == -1) {
-        char * buffer = 0;
-        size_t buffersize = 0;
-        ssize_t char_count = getline(&buffer, &buffersize, stdin);
-
-        // Remove \n
-        if(buffer[char_count - 1] == '\n') {
-            buffer[char_count - 1] = 0;
-            char_count--;
-        }
-
-        entered_time = parse_different_time_formats(buffer, char_count);
-        printf("Unix time: %ld\n", entered_time);
-    }
-}
-
-int64_t absolute_time(char * buffer) {
-    const char * format = "%dd%dm%dy%dh%dm";
-    int day, month, year, hour, minute;
-    if(sscanf(buffer, format, &day, &month, &year, &hour, &minute) == 5) {
-
-        if(year < 1970) {
-            pretty_print("Year cannot be lower than 1970, try again\n");
-            return -1;
-        }
-
-        if(month > 12) {
-            pretty_print("Month value must fall in [1, 12], try again\n");
-            return -1;
-        }
-
-        int days_in_month = 1;
-        switch (month) {
-            case 0:
-            case 2:
-            case 4:
-            case 6:
-            case 7:
-            case 9:
-            case 11:
-                days_in_month = 31;
-                break;
-            case 3:
-            case 5:
-            case 8:
-            case 10:
-                days_in_month = 30;
-                break;
-            case 1:
-                if(is_leapyear(year)) days_in_month = 29;
-                else days_in_month = 28;
-            default: panic("This shoud not happen\n");
-        }
-
-        if(day > days_in_month) {
-            pretty_print("Day must fall in [1, %d], try again\n", days_in_month);
-            return -1;
-        }
-
-        if(hour > 23) {
-            pretty_print("Hour must fall in [0, 23], try again\n");
-            return -1;
-        }
-
-        if(minute > 59) {
-            pretty_print("Minute must fall in [0, 59], try again\n");
-            return -1;
-        }
-
-
-        // Convert to unix time
-        // VERKEERD
-        struct tm tm;
-        tm.tm_sec = 0;
-        tm.tm_min = minute;
-        tm.tm_hour = hour;
-        tm.tm_mday = day;
-        tm.tm_mon = month;
-        tm.tm_year = year - 1970;
-        tm.tm_isdst = -1; // Determines daylightsaving itself
-        // TODO: mayby change this in the future because this might not be correct, see man mktime -> caveats
-        return mktime(&tm);
-    }
-    return -1;
-}
-
-int64_t parse_different_time_formats(char * buffer, ssize_t char_count) {
-    int64_t result = 0;
-
-    // Unix time
-    if(buffer[char_count - 1] == 'u') {
-        log_debug("Probably entered unix time\n");
-        if(sscanf(buffer, "%ldu", &result) == 1) {
-            return result;
-        }
-    }
-
-    // Delta time
-    //int day, month, year, hour, minute;
-    //if(sscanf(buffer, "+%dd%dm%dy%dh%dm", &day, &month, &year, &hour, &minute) == 5) {
-    //    if(day < 0 || month < 0 || year < 0 || hour < 0 || minute < 0) {
-    //        pretty_print("One of the entered values if negative, this is not allowed, try again");
-    //        return -1;
-    //    }
-    //}
-    if(buffer[0] == '+') {
-        log_debug("Probably entering delta time\n");
-        panic("Delta time is not implemented yet\n");
-        //return non_unix_time(buffer, "+%dd%dm%dy%dh%dm");
-    }
-
-    log_debug("Probable entering absolute time\n");
-    return absolute_time(buffer);
 }

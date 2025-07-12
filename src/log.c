@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 void generic_log(const char * prefix, const char * fmt, va_list args) {
     fprintf(stderr, "%s ", prefix);
@@ -51,4 +52,16 @@ void log_info(const char * fmt, ...) {
 
     va_end(args);
     #endif
+}
+
+void panic(const char * fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    generic_log("[PANIC]", fmt, args);
+
+    va_end(args);
+
+    db_close();
+    exit(EXIT_FAILURE);
 }

@@ -19,9 +19,15 @@ struct datetime_t {
     uint16_t year;
 };
 
-void datetime_new(datetime_t * dt, uint8_t minute, uint8_t hour, uint8_t day, uint8_t month, uint16_t year);
+int datetime_new(datetime_t * dt, uint8_t minute, uint8_t hour, uint8_t day, uint8_t month, uint16_t year);
 char * datetime_to_string(const datetime_t * dt);
 void datetime_print(const datetime_t * dt);
+/**
+ * @brief Converts UNIX time to datetime_t
+ *
+ * @param dt datetime_t struct as destination
+ * @param t time_t struct as source
+*/
 void datetime(datetime_t * dt, time_t * t);
 
 /**

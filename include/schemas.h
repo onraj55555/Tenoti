@@ -9,7 +9,7 @@ struct notification_t {
     int8_t exists;
     int8_t checked;
     int8_t reminder;
-    char title[51];
+    char title[50];
     int64_t created_at;
     int64_t due;
     int64_t details;

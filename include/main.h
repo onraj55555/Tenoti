@@ -19,13 +19,6 @@
 #define FUTURE_TIME 2 * 60 * 60 // max 2 hrs in advance
 
 /**
- * @brief Initialised an sqlite3 struct pointing to the config specified above
- * 
- * @return A pointer to the struct, when this call fails the program exits
- */
-sqlite3 * init();
-
-/**
  * @brief Returns the current time in UNIX time format
  * 
  * @return An int64_t type representing the current UNIX time
@@ -39,10 +32,14 @@ int64_t get_current_time();
  */
 int64_t from_now(int64_t t);
 
+void parse_args(int argc, char ** argv);
+
+
 /**
- * @brief Runs the program in general usage, this means when no arguments are supplied. This will show all notifications due within the configured future time.
+ * @brief Functionality for the add command specifief with "executable a"
  */
-void general_usage(sqlite3 * db);
-void parse_args(sqlite3 * db, int argc, char ** argv);
+void command_add();
+
+void command_general_usage();
 
 #endif

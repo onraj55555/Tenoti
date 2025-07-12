@@ -6,6 +6,14 @@
 // Debug: 3
 // Info: 4
 
+#include <stdio.h>
+#include "db.h"
+
+void panic(const char * fmt, ...);
+
+#define TODO(msg) \
+    panic("TODO at %s:%d — %s\n", __FILE__, __LINE__, msg)
+
 #define LOGLEVEL 4
 
 void log_error(const char *fmt, ...);
